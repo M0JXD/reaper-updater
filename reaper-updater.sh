@@ -1,5 +1,5 @@
 #!/bin/sh
-# dependencies: libxml curl tar posix-shell 
+# dependencies: libxml curl tar posix-shell
 # tested with bash and dash
 
 # global variables
@@ -9,7 +9,25 @@ URL="https://www.reaper.fm"
 #
 get_dl_path() {
     # parent of download button wich is a link, that contains linux_x86_64 => download link
-    xpath_string="//img[@class='downloadbutton']/parent::a[contains(@href,'linux_x86_64')]/@href"
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)
+            xpath_string="//img[@class='downloadbutton']/parent::a[contains(@href,'linux_x86_64')]/@href"
+            ;;
+        i386|i686)
+            xpath_string="//img[@class='downloadbutton']/parent::a[contains(@href,'linux_i686')]/@href"
+            ;;
+        aarch64|arm64)
+            xpath_string="//img[@class='downloadbutton']/parent::a[contains(@href,'linux_aarch64')]/@href"
+            ;;
+        armv7l|armhf)
+            xpath_string="//img[@class='downloadbutton']/parent::a[contains(@href,'linux_armv7l')]/@href"
+            ;;
+        *)
+            echo "Unsupported architecture: $arch" >&2
+            exit
+            ;;
+    esac
     curl -s  $URL/download.php | xmllint --html --xpath $xpath_string - | cut -d'=' -f2 | tr -d "\""
 }
 
@@ -21,6 +39,11 @@ string_contain() {
         ;;
     esac
     return $_ret
+}
+
+make_starter_script() {
+    echo "#!/bin/sh\n${install_path}/REAPER/reaper \"\$@\"" > ~/.local/bin/reaper
+    chmod +x ~/.local/bin/reaper
 }
 
 reaper_dl() {
@@ -53,7 +76,7 @@ reaper_archive() {
 
 ################ option checking ##################
 for tag in "$@";do
-    case "$tag" in  
+    case "$tag" in
         '-a'*|'--archive'*)
             archive_path="$(echo "$tag" | cut -d' ' -f2-)"
             [ -z "$archive_path" ] && archive_path="$(xdg-user-dir DOWNLOAD)"
@@ -66,11 +89,16 @@ for tag in "$@";do
         '-p'|'--path')
             install_path="$(echo "$tag" | cut -d' ' -f2- | tr -s '/')"
         ;;
+
+        '-n'|'--no-script')
+            install_script=0
+        ;;
+
         'help'|'-h'|'--help')
             #groff -Tascii -man test.1 | less
             printf '
 USAGE:
-./reaper-updater.sh [options] 
+./reaper-updater.sh [options]
 
 NOTE:
 Without any arguments Reaper will be installed to the directory: ~/.local/opt (no prompt necessary)
@@ -80,15 +108,19 @@ OPTIONS:
 \t[--help | -h | help]
 \t:\tshow help page
 
-    The tarball by default will be discarded after execution 
+    The tarball by default will be discarded after execution
     to save it use the -a option.
 \t[-a <ARCHIVEPATH>|--archive <ARCHIVEPATH>]
 \t:\tset your path of preference
 \t\tfor the script to save the tarball to
 
-     
+
 \t[-g|--get-only] : Download reaper tarball without installing.
 \t:\tWithout the ARCHIVEPATH set it will be downloaded in ~/Downloads
+
+
+\t[-n|--no-script] : Do not create starter script under .local/bin.
+\t:\t Set
 
 EXAMPLES:
 
@@ -136,9 +168,14 @@ fi
 if [ -z "$download_only" ]; then
     reaper_unpack
     reaper_install
-    echo "Reaper has now been installed"
+    echo "REAPER has been installed."
 else
-    echo "not installing"
+    echo "Tarball downloaded, did not install."
+fi
+
+if [ -z "$install_script" ]; then
+    make_starter_script
+    echo "Starter script added to ~/.local/bin"
 fi
 
 reaper_remove
