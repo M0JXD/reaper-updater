@@ -14,6 +14,7 @@ It can also be used for downloading only without installing.
 ## Usage
 
 To find out how to use the script, please use the help option:
+
 ```
 ./reaper_updater.sh --help
 ```
